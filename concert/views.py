@@ -1,10 +1,10 @@
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import get_object_or_404
-from django.shortcuts import render
+from django.shortcuts import render, redirect, reverse
 from django.urls import reverse
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
 
 from concert.forms import LoginForm, SignUpForm
 from concert.models import Concert, ConcertAttending
@@ -14,7 +14,21 @@ import requests as req
 # Create your views here.
 
 def signup(request):
-    pass
+    if request.method == "GET":
+        return render(request, "signup.html", {"form": SignUpForm})
+    elif request.method == "POST":        
+        try:
+            username = request.POST["username"]
+            password = request.POST["password"]
+            user = User.objects.filter(username=username)
+            if not user:
+                user = User(username=username, password=make_password(password))
+                user.save()
+                return redirect(reverse('index'))
+            else:
+                return render(request, "signup.html", {"form": SignUpForm, "message": "user already exist"})
+        except KeyError:
+            return render(request, "signup.html", {"form": SignUpForm})
 
 
 def index(request):
@@ -22,24 +36,58 @@ def index(request):
 
 
 def songs(request):
-    # songs = {"songs":[]}
-    # return render(request, "songs.html", {"songs": [insert list here]})
-    pass
+    songs = {"songs":[{"id":1,"title":"duis faucibus accumsan odio curabitur convallis","lyrics":"Morbi non lectus. Aliquam sit amet diam in magna bibendum imperdiet. Nullam orci pede, venenatis non, sodales sed, tincidunt eu, felis."}]}
+    return render(request, "songs.html", {"songs": songs["songs"]})
 
 
 def photos(request):
-    # photos = []
-    # return render(request, "photos.html", {"photos": photos})
-    pass
+    photos = [{
+    "id": 1,
+    "pic_url": "http://dummyimage.com/136x100.png/5fa2dd/ffffff",
+    "event_country": "United States",
+    "event_state": "District of Columbia",
+    "event_city": "Washington",
+    "event_date": "11/16/2022"}]
+    return render(request, "photos.html", {"photos": photos})
+    
 
 def login_view(request):
-    pass
+    if request.method == "POST":
+        try:
+            username = request.POST["username"]
+            password = request.POST["password"]
+            user = authenticate(username=username, password=password)
+            if user:
+                login(request, user)
+                return redirect(reverse("index"))
+            else:
+                return render(request, "login.html", {"form": LoginForm, "message": "wrong credentials"})
+        except KeyError:
+            return render(request, "login.html", {"form": LoginForm, "message": "username and/or password is empty"})
+    return render(request, "login.html", {"form": LoginForm})
 
 def logout_view(request):
-    pass
+    logout(request)
+    return redirect(reverse("login"))
 
 def concerts(request):
-    pass
+    if request.user.is_authenticated:
+        list_of_concerts = []
+        concert_objects = Concert.objects.all()
+        for concert in concert_objects:
+            try:
+                status = concert.attendee.filter(user=request.user).first().attending
+            except:
+                status = "-"
+            list_of_concerts.append(
+                {
+                    "concert": concert,
+                    "status": status
+                }
+            )
+        return render(request, "concerts.html", {"concerts": list_of_concerts})
+    else:
+        return redirect(reverse("login"), {"form": LoginForm})
 
 
 def concert_detail(request, id):
